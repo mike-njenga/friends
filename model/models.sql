@@ -16,7 +16,7 @@ CREATE TABLE profiles (
 
 CREATE TABLE friends(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE, --remember to remove this
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL,
     phone VARCHAR(100) NOT NULL,
