@@ -8,7 +8,7 @@ import type { CookieOptions } from 'express';
 const getCookieOptions = (): CookieOptions => ({
     httpOnly: config.cookies.httpOnly,
     secure: config.cookies.secure,
-    sameSite: config.cookies.sameSite as 'strict' | 'lax' | 'none',
+    sameSite: config.cookies.sameSite, //as 'strict' | 'lax' | 'none',
     maxAge: config.cookies.maxAge,
     path: '/',
 });
