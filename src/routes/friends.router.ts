@@ -7,6 +7,7 @@ import {
 } from '../validator/friends .validator.js';
 import { validate } from '../validator/validate.js';
 
+
 const router = express.Router();
 
 router.get('/friends', friendsController.listFriends);
@@ -16,3 +17,6 @@ router.put('/friends/:id', updateFriendValidator, validate, friendsController.up
 router.delete('/friends/:id', deleteFriendValidator, validate, friendsController.deleteFriend);
 
 export default router;
+
+
+

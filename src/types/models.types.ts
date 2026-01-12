@@ -36,6 +36,6 @@ export interface CreateFriendInput {
 
 export interface UpdateFriendInput {
   name: string;
-  //email: string;
+  email: string;
   phone: string;
 }

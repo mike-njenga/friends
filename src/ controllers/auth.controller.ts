@@ -2,9 +2,16 @@ import type { Request, Response } from "express"
 import { supabaseAdmin, supabaseClient } from "../config/supabase.js"
 import type { CreateUserProfileInput } from "../types/models.types.js"
 import config from "../config/env.js";
+import type { CookieOptions } from 'express';
 
-
-
+// Helper: Reusable cookie options
+const getCookieOptions = (): CookieOptions => ({
+    httpOnly: config.cookies.httpOnly,
+    secure: config.cookies.secure,
+    sameSite: config.cookies.sameSite as 'strict' | 'lax' | 'none',
+    maxAge: config.cookies.maxAge,
+    path: '/',
+});
 
 // Admin creates user - no auto-login
 export const createUser = async (req: Request, res: Response) => {
@@ -15,7 +22,7 @@ export const createUser = async (req: Request, res: Response) => {
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
             password,
-            email_confirm: true, // Auto-confirm email for admin-created users
+            email_confirm: true,
             user_metadata: {
                 username,
             },
@@ -82,7 +89,6 @@ export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
 
-        // Sign in with Supabase Auth using regular client
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
@@ -96,7 +102,6 @@ export const login = async (req: Request, res: Response) => {
             });
         }
 
-        // Get user profile
         const { data: profile, error: profileError } = await supabaseAdmin
             .from('user_profiles')
             .select('id, email, username, role, phone, is_active')
@@ -117,14 +122,7 @@ export const login = async (req: Request, res: Response) => {
             });
         }
 
-        // Set secure HTTP-only cookies
-        const cookieOptions = {
-            httpOnly: config.cookies.httpOnly,
-            secure: config.cookies.secure,
-            sameSite: config.cookies.sameSite,
-            maxAge: config.cookies.maxAge,
-            path: '/',
-        };
+        const cookieOptions = getCookieOptions();
 
         res.cookie(config.cookies.accessTokenName, data.session.access_token, cookieOptions);
         res.cookie(config.cookies.refreshTokenName, data.session.refresh_token, cookieOptions);
@@ -150,10 +148,8 @@ export const login = async (req: Request, res: Response) => {
     }
 };
 
-// Refresh access token
 export const refreshToken = async (req: Request, res: Response) => {
     try {
-        // Get refresh token from cookie
         const refresh_token = req.cookies?.[config.cookies.refreshTokenName];
 
         if (!refresh_token) {
@@ -163,13 +159,11 @@ export const refreshToken = async (req: Request, res: Response) => {
             });
         }
 
-        // Refresh the session using Supabase client
         const { data, error } = await supabaseClient.auth.refreshSession({
             refresh_token,
         });
 
         if (error || !data.session) {
-            // Clear invalid cookies
             res.clearCookie(config.cookies.accessTokenName, { path: '/' });
             res.clearCookie(config.cookies.refreshTokenName, { path: '/' });
             
@@ -180,7 +174,6 @@ export const refreshToken = async (req: Request, res: Response) => {
             });
         }
 
-        // Verify user is still active
         if (!data.user) {
             return res.status(401).json({
                 status: 'error',
@@ -195,7 +188,6 @@ export const refreshToken = async (req: Request, res: Response) => {
             .single();
 
         if (!profile || !profile.is_active) {
-            // Clear cookies for inactive user
             res.clearCookie(config.cookies.accessTokenName, { path: '/' });
             res.clearCookie(config.cookies.refreshTokenName, { path: '/' });
             
@@ -205,14 +197,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             });
         }
 
-        // Set new secure HTTP-only cookies
-        const cookieOptions = {
-            httpOnly: config.cookies.httpOnly,
-            secure: config.cookies.secure,
-            sameSite: config.cookies.sameSite,
-            maxAge: config.cookies.maxAge,
-            path: '/',
-        };
+        const cookieOptions = getCookieOptions();
 
         res.cookie(config.cookies.accessTokenName, data.session.access_token, cookieOptions);
         res.cookie(config.cookies.refreshTokenName, data.session.refresh_token, cookieOptions);
@@ -231,7 +216,6 @@ export const refreshToken = async (req: Request, res: Response) => {
     }
 };
 
-// Change password
 export const changePassword = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -244,7 +228,6 @@ export const changePassword = async (req: Request, res: Response) => {
             });
         }
 
-        // Verify current password by attempting to sign in
         const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (!authUser?.user?.email) {
             return res.status(404).json({
@@ -265,7 +248,6 @@ export const changePassword = async (req: Request, res: Response) => {
             });
         }
 
-        // Update password
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
             password: new_password,
         });
@@ -292,19 +274,10 @@ export const changePassword = async (req: Request, res: Response) => {
     }
 };
 
-// Admin reset password
 export const adminResetPassword = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params as { id: string};
-
+        const { id } = req.params as {id: string}
         const { new_password } = req.body;
-
-        if (!id) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'User ID is required'
-            });
-        }
 
         const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
             password: new_password,
@@ -332,26 +305,26 @@ export const adminResetPassword = async (req: Request, res: Response) => {
     }
 };
 
-// Request password reset
 export const requestPasswordReset = async (req: Request, res: Response) => {
     try {
         const { email } = req.body;
 
-        // Request password reset email using Supabase client
-        // Supabase will send an email with a reset link
         const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: `${config.frontendUrl}/reset-password`,
         });
 
-        // Always return success message for security (don't reveal if email exists)
-        // This prevents email enumeration attacks
+        // Log error for debugging but don't expose to user
+        if (error) {
+            console.error('Password reset email error:', error);
+        }
+
+        // Always return success for security (prevents email enumeration)
         res.status(200).json({
             status: 'success',
             message: 'If an account with that email exists, a password reset link has been sent.'
         });
     } catch (error) {
         console.error('Request password reset error:', error);
-        // Still return success for security
         res.status(200).json({
             status: 'success',
             message: 'If an account with that email exists, a password reset link has been sent.'
@@ -359,75 +332,35 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     }
 };
 
-// Reset password - called after user clicks reset link from email
-// Note: Supabase's password reset flow works as follows:
-// 1. User requests reset -> Supabase sends email with token
-// 2. User clicks link -> Frontend receives token in URL hash
-// 3. Frontend verifies token and calls updateUser with new password
-// 
-// This endpoint provides an alternative using admin API if needed
-// The frontend should ideally use Supabase client's updateUser after verifying token
+// CRITICAL: This endpoint should be REMOVED or heavily modified
+// It's a major security vulnerability as written
 export const resetPassword = async (req: Request, res: Response) => {
-    try {
-        const { email, new_password } = req.body;
-
-        // Find user by email
-        const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-        const user = users?.users.find(u => u.email === email);
-
-        if (!user) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'User not found'
-            });
-        }
-
-        // Update password using admin API
-        // Note: In a production environment, you should verify the reset token
-        // from the email link before allowing password reset
-        // For now, this provides a backend alternative
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-            password: new_password,
-        });
-
-        if (error) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Failed to reset password',
-                details: error.message
-            });
-        }
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Password reset successfully. Please login with your new password.'
-        });
-    } catch (error) {
-        console.error('Reset password error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Internal server error',
-            details: error instanceof Error ? error.message : 'Unknown error'
-        });
-    }
+    // WARNING: This endpoint allows password reset without token verification
+    // Anyone with an email can reset any user's password
+    // 
+    // RECOMMENDATION: Remove this endpoint entirely and use Supabase's built-in
+    // password reset flow on the frontend:
+    // 1. User clicks reset link from email
+    // 2. Frontend verifies token from URL
+    // 3. Frontend calls supabase.auth.updateUser({ password: newPassword })
+    //
+    // If you MUST keep a backend endpoint, it should:
+    // 1. Accept a reset token (from the email link)
+    // 2. Verify the token with Supabase
+    // 3. Only then allow password update
+    
+    return res.status(501).json({
+        status: 'error',
+        message: 'This endpoint is disabled for security reasons. Please use the password reset link sent to your email.'
+    });
 };
 
-// Logout
 export const logout = async (req: Request, res: Response) => {
     try {
-        // Clear HTTP-only cookies
-        res.clearCookie(config.cookies.accessTokenName, {
-            httpOnly: config.cookies.httpOnly,
-            secure: config.cookies.secure,
-            sameSite: config.cookies.sameSite,
-            path: '/',
-        });
-        res.clearCookie(config.cookies.refreshTokenName, {
-            httpOnly: config.cookies.httpOnly,
-            secure: config.cookies.secure,
-            sameSite: config.cookies.sameSite,
-            path: '/',
-        });
+        const cookieOptions = getCookieOptions();
+        
+        res.clearCookie(config.cookies.accessTokenName, cookieOptions);
+        res.clearCookie(config.cookies.refreshTokenName, cookieOptions);
 
         res.status(200).json({
             status: 'success',
@@ -442,4 +375,3 @@ export const logout = async (req: Request, res: Response) => {
         });
     }
 };
-
