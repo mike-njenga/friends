@@ -1,28 +1,36 @@
 import express from 'express';
-import { login, logout, changePassword, requestPasswordReset, resetPassword, refreshToken } from '../ controllers/auth.controller.js';
 import { 
+    signup,
+    login, 
+    logout, 
+    changePassword, 
+    requestPasswordReset, 
+    refreshToken,
+    getCurrentUser  
+} from '../ controllers/auth.controller.js';
+import { 
+    signupValidator,
     loginValidator, 
     logoutValidator, 
     changePasswordValidator, 
     requestPasswordResetValidator, 
-    resetPasswordValidator, 
-    refreshTokenValidator } from '../validator/auth.validator.js'
+    refreshTokenValidator 
+} from '../validator/auth.validator.js';
+import { validate } from '../validator/validate.js';
 import { authenticateUser } from '../middleware/auth.js';
-import {validate} from "../validator/validate.js"
 
 const router = express.Router();
 
 // Public endpoints
-router.post('/login', loginValidator, login, validate);
-router.post('/refresh', refreshTokenValidator, refreshToken, validate);
-router.post('/forgot-password', requestPasswordResetValidator, requestPasswordReset, validate);
-router.post('/reset-password', resetPasswordValidator, resetPassword, validate);
+router.post('/signup', signupValidator, validate, signup);
+router.post('/login', loginValidator, validate, login);
+router.post('/refresh', refreshTokenValidator, validate, refreshToken);
+router.post('/forgot-password', requestPasswordResetValidator, validate, requestPasswordReset);
 
 // Protected endpoints - require authentication
-router.use(authenticateUser, validate);
-router.post('/logout',logoutValidator, logout, validate);
-router.put('/password', changePasswordValidator, changePassword, validate);
+router.use(authenticateUser);
+router.get('/me', getCurrentUser);  // NEW - No validator needed for GET
+router.post('/logout', logoutValidator, validate, logout);
+router.put('/password', changePasswordValidator, validate, changePassword);
 
-export default router
-
-
+export default router;

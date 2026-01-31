@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
-import config from './env.js'
+import myconfig from './env.js'
 
 
 
-if (!config.supabase.anonKey || !config.supabase.serviceRoleKey || !config.supabase.url ) {
+if (!myconfig.supabase.anonKey || !myconfig.supabase.serviceRoleKey || !myconfig.supabase.url ) {
   throw new Error('Supabase environment variables are missing')
 }
 
 export const supabaseAdmin = createClient(
-  config.supabase.url,
-  config.supabase.serviceRoleKey,
+  myconfig.supabase.url,
+  myconfig.supabase.serviceRoleKey,
   {
     auth: {
       autoRefreshToken: false,
@@ -19,8 +19,8 @@ export const supabaseAdmin = createClient(
 )
 
 export const supabaseClient = createClient(
-  config.supabase.url,
-  config.supabase.serviceRoleKey,
+  myconfig.supabase.url,
+  myconfig.supabase.serviceRoleKey,
   {auth:{
     autoRefreshToken: true,
     persistSession: false

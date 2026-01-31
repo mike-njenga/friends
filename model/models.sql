@@ -2,25 +2,32 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE profiles (
+
+
+CREATE TABLE user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     avatar_url TEXT,
-    role VARCHAR(20) NOT NULL DEFAULT ' user' CHECK (role IN ('admin', 'user')),
-    created_at TIMESTAMPTZ  DEFAULT NOW(),
-    updated_at TIMESTAMPTZ  DEFAULT NOW()
-
+    phone TEXT,
+    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+
+
+
 
 
 CREATE TABLE friends(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE, --remember to remove this
+   user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE, --remember to remove this
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL,
     phone VARCHAR(100) NOT NULL,
-    created_at TIMESTAMPTZ  DEFAULT NOW()
+    created_at TIMESTAMPTZ  DEFAULT NOW(),
     updated_at TIMESTAMPTZ  DEFAULT NOW()
 );
 
@@ -34,7 +41,7 @@ END;
 $$ language 'plpgsql';
 
 -- 4. Add Triggers for updated_at
-CREATE TRIGGER update_profiles_modtime BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+CREATE TRIGGER update_profiles_modtime BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_friends_modtime BEFORE UPDATE ON friends FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 
@@ -42,7 +49,7 @@ CREATE TRIGGER update_friends_modtime BEFORE UPDATE ON friends FOR EACH ROW EXEC
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, username, role)
+  INSERT INTO public.user_profiles (id, email, username, role)
   VALUES (
     NEW.id, 
     NEW.email, 
@@ -62,17 +69,17 @@ CREATE TRIGGER on_auth_user_created
 
 
 --RLS
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
 -- Example Policy: Allow users to view their own profile
 CREATE POLICY "Users can view own profile" 
-ON profiles FOR SELECT 
+ON user_profiles FOR SELECT 
 USING (auth.uid() = id);
 
 
 --index
 -- Index for searching users by role
-CREATE INDEX idx_profiles_role ON profiles(role);
+CREATE INDEX idx_user_profiles_role ON user_profiles(role);
 
 -- Index for searching friends by email
 CREATE INDEX idx_friends_email ON friends(email);

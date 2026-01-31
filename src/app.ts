@@ -1,12 +1,20 @@
 import express from "express"
+//import helmet from "helmet"
 import cors from "cors"
 import morgan from "morgan" 
+import friendsRoute from "./routes/friends.router.js"
+import authRoute from "./routes/auth.routes.js"
+import myconfig from "./config/env.js"
+
 
 const app = express()
+//app.use(helmet()
 app.use(morgan("dev"));
 app.use(cors({
-    origin: process.env.FRONTED_URL,
-    credentials: false
+    origin: myconfig.frontendUrl | true ,
+    credentials: true,
+    methods: ['GET', 'POST','DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type','Authorization']
     
 }));
 
@@ -18,8 +26,14 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/api/health",(req,res)=>{
     res.status(200).json({messsage: "server is running"})
 })
+
+//api routes
+app.use("/api/friends", friendsRoute);
+app.use("/api/auth", authRoute);
+
 // SUPBASE 
 import { supabaseAdmin } from './config/supabase.js'
+import { config } from "dotenv"
 
 app.get('/supabase-test', async (_req, res) => {
   const { data, error } = await supabaseAdmin

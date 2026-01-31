@@ -13,6 +13,55 @@ const getCookieOptions = (): CookieOptions => ({
     path: '/',
 });
 
+
+// Public user registration/signup
+export const signup = async (req: Request, res: Response) => {
+    try {
+        const { email, password, username, phone } = req.body;
+
+
+        // Create user in Supabase Auth
+        const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    username,
+                },
+                emailRedirectTo: `${config.frontendUrl}/verify-email`,
+            },
+        });
+        if (authError || !authData.user) {
+
+            return res.status(400).json({
+                status: 'error',
+                message: 'Failed to create account',
+                details: authError?.message || 'Unknown error'
+            });
+        }
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Account created successfully. Please check your email to verify your account.',
+            user: {
+                id: authData.user.id,
+                email: authData.user.email,
+                username,
+            }
+        });
+    } catch (error) {
+        console.error('Signup error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+};
+
+
+
+
 // Admin creates user - no auto-login
 export const createUser = async (req: Request, res: Response) => {
     try {
@@ -40,6 +89,7 @@ export const createUser = async (req: Request, res: Response) => {
         }
 
         // Create user profile
+
         const userProfile: CreateUserProfileInput = {
             id: authData.user.id,
             email: authData.user.email || email,
@@ -85,16 +135,22 @@ export const createUser = async (req: Request, res: Response) => {
     }
 };
 
+
+
 export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
+        // console.log(req.body);
 
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email,
             password,
         });
 
+
+
         if (error || !data.session || !data.user) {
+
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid email or password',
@@ -107,6 +163,8 @@ export const login = async (req: Request, res: Response) => {
             .select('id, email, username, role, phone, is_active')
             .eq('id', data.user.id)
             .single();
+
+
 
         if (profileError || !profile) {
             return res.status(404).json({
@@ -148,6 +206,8 @@ export const login = async (req: Request, res: Response) => {
     }
 };
 
+
+//refresh token
 export const refreshToken = async (req: Request, res: Response) => {
     try {
         const refresh_token = req.cookies?.[config.cookies.refreshTokenName];
@@ -166,7 +226,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (error || !data.session) {
             res.clearCookie(config.cookies.accessTokenName, { path: '/' });
             res.clearCookie(config.cookies.refreshTokenName, { path: '/' });
-            
+
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid or expired refresh token',
@@ -190,7 +250,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (!profile || !profile.is_active) {
             res.clearCookie(config.cookies.accessTokenName, { path: '/' });
             res.clearCookie(config.cookies.refreshTokenName, { path: '/' });
-            
+
             return res.status(403).json({
                 status: 'error',
                 message: 'Account is inactive. Please contact administrator.'
@@ -276,7 +336,7 @@ export const changePassword = async (req: Request, res: Response) => {
 
 export const adminResetPassword = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params as {id: string}
+        const { id } = req.params as { id: string }
         const { new_password } = req.body;
 
         const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
@@ -332,33 +392,65 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     }
 };
 
-// CRITICAL: This endpoint should be REMOVED or heavily modified
-// It's a major security vulnerability as written
-export const resetPassword = async (req: Request, res: Response) => {
-    // WARNING: This endpoint allows password reset without token verification
-    // Anyone with an email can reset any user's password
-    // 
-    // RECOMMENDATION: Remove this endpoint entirely and use Supabase's built-in
-    // password reset flow on the frontend:
-    // 1. User clicks reset link from email
-    // 2. Frontend verifies token from URL
-    // 3. Frontend calls supabase.auth.updateUser({ password: newPassword })
-    //
-    // If you MUST keep a backend endpoint, it should:
-    // 1. Accept a reset token (from the email link)
-    // 2. Verify the token with Supabase
-    // 3. Only then allow password update
-    
-    return res.status(501).json({
-        status: 'error',
-        message: 'This endpoint is disabled for security reasons. Please use the password reset link sent to your email.'
-    });
+
+// Get current authenticated user
+export const getCurrentUser = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Unauthorized'
+            });
+        }
+
+        // Get user profile with all necessary data
+        const { data: profile, error } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id, email, username, role, phone, is_active, created_at')
+            .eq('id', userId)
+            .single();
+
+        if (error || !profile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User profile not found'
+            });
+        }
+
+        if (!profile.is_active) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Account is inactive'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            user: {
+                id: profile.id,
+                email: profile.email,
+                username: profile.username,
+                role: profile.role,
+                phone: profile.phone,
+                created_at: profile.created_at,
+            }
+        });
+    } catch (error) {
+        console.error('Get current user error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 };
 
 export const logout = async (req: Request, res: Response) => {
     try {
         const cookieOptions = getCookieOptions();
-        
+
         res.clearCookie(config.cookies.accessTokenName, cookieOptions);
         res.clearCookie(config.cookies.refreshTokenName, cookieOptions);
 
